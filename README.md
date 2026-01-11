@@ -68,6 +68,10 @@ Claude: [Imports issue and dependencies]
 ### Homebrew (Recommended for macOS/Linux)
 
 ```bash
+# Direct install (recommended)
+brew install conallob/tap/jira-beads-sync
+
+# Or tap first, then install
 brew tap conallob/tap
 brew install jira-beads-sync
 ```

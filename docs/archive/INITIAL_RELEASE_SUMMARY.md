@@ -261,7 +261,7 @@ Copyright (c) 2026, Conall O'Brien
 ## Acknowledgments
 
 This tool integrates with:
-- **beads**: Git-backed issue tracker ([beads documentation](https://github.com/conallob/beads))
+- **beads**: Git-backed issue tracker ([beads documentation](https://github.com/steveyegge/beads))
 - **Jira REST API v2**: Atlassian's issue tracking platform
 - **Claude Code**: Anthropic's AI-powered CLI tool
 
