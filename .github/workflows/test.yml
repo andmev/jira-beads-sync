@@ -104,9 +104,9 @@ jobs:
 
     - name: Run golangci-lint
       if: steps.filter.outputs.go == 'true' || github.event_name == 'push'
-      uses: golangci/golangci-lint-action@v6
+      uses: golangci/golangci-lint-action@v9
       with:
-        version: latest
+        version: v2.6
         args: --timeout=5m
         only-new-issues: true
 
