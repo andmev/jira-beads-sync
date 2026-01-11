@@ -69,29 +69,47 @@ jobs:
     - name: Checkout code
       uses: actions/checkout@v4
 
+    - name: Check for relevant file changes
+      uses: dorny/paths-filter@v3
+      id: filter
+      with:
+        filters: |
+          go:
+            - '**/*.go'
+            - 'go.mod'
+            - 'go.sum'
+            - 'Makefile'
+            - 'proto/**'
+
     - name: Set up Go
+      if: steps.filter.outputs.go == 'true' || github.event_name == 'push'
       uses: actions/setup-go@v5
       with:
         go-version: '1.25'
 
     - name: Install protoc
+      if: steps.filter.outputs.go == 'true' || github.event_name == 'push'
       run: |
         sudo apt-get update
         sudo apt-get install -y protobuf-compiler
 
     - name: Install protoc-gen-go
+      if: steps.filter.outputs.go == 'true' || github.event_name == 'push'
       run: go install google.golang.org/protobuf/cmd/protoc-gen-go@latest
 
     - name: Generate protobuf files
+      if: steps.filter.outputs.go == 'true' || github.event_name == 'push'
       run: protoc --go_out=. --go_opt=module=github.com/conallob/jira-beads-sync --proto_path=proto proto/jira.proto proto/beads.proto
 
     - name: Run golangci-lint
+      if: steps.filter.outputs.go == 'true' || github.event_name == 'push'
       uses: golangci/golangci-lint-action@v6
       with:
         version: latest
         args: --timeout=5m
 
     - name: Check formatting
+      if: steps.filter.outputs.go == 'true' || github.event_name == 'push'
       run: |
         if [ -n "$(gofmt -l .)" ]; then
           echo "The following files are not formatted:"
