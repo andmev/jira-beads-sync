@@ -79,10 +79,10 @@ func (c *Client) FetchIssue(issueKey string) (*pb.Issue, error) {
 
 // UserInfo represents basic information about a Jira user
 type UserInfo struct {
-	AccountID   string `json:"accountId"`
-	DisplayName string `json:"displayName"`
+	AccountID    string `json:"accountId"`
+	DisplayName  string `json:"displayName"`
 	EmailAddress string `json:"emailAddress"`
-	Active      bool   `json:"active"`
+	Active       bool   `json:"active"`
 }
 
 // GetCurrentUser fetches information about the currently authenticated user
