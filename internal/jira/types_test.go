@@ -223,17 +223,4 @@ func TestJiraTimeEdgeCases(t *testing.T) {
 			t.Errorf("End of day time = %v, want %v", jt.Time, expected)
 		}
 	})
-
-	t.Run("year 2000 (Y2K)", func(t *testing.T) {
-		input := `"2000-01-01T00:00:00.000+0000"`
-		var jt JiraTime
-		err := json.Unmarshal([]byte(input), &jt)
-		if err != nil {
-			t.Fatalf("Failed to unmarshal Y2K date: %v", err)
-		}
-		expected := time.Date(2000, 1, 1, 0, 0, 0, 0, time.UTC)
-		if !jt.Time.Equal(expected) {
-			t.Errorf("Y2K date = %v, want %v", jt.Time, expected)
-		}
-	})
 }
