@@ -326,15 +326,15 @@ func runAnnotate(issueID, repository string) error {
 		return fmt.Errorf("failed to get current directory: %w", err)
 	}
 
-	yamlRenderer := beads.NewYAMLRenderer(outputDir)
+	jsonlRenderer := beads.NewJSONLRenderer(outputDir)
 
 	// Add repository annotation
-	if err := yamlRenderer.AddRepositoryAnnotation(issueID, repository); err != nil {
+	if err := jsonlRenderer.AddRepositoryAnnotation(issueID, repository); err != nil {
 		return fmt.Errorf("failed to annotate issue: %w", err)
 	}
 
 	fmt.Printf("✓ Added repository '%s' to issue %s\n", repository, issueID)
-	fmt.Printf("  Updated: %s/.beads/issues/%s.yaml\n", outputDir, issueID)
+	fmt.Printf("  Updated: %s/.beads/issues.jsonl\n", outputDir)
 
 	return nil
 }

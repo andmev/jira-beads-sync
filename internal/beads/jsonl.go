@@ -1,10 +1,12 @@
 package beads
 
 import (
+	"bufio"
 	"encoding/json"
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 
 	pb "github.com/conallob/jira-beads-sync/gen/beads"
 	"google.golang.org/protobuf/types/known/timestamppb"
@@ -228,4 +230,75 @@ func (r *JSONLRenderer) timestampToString(ts *timestamppb.Timestamp) string {
 		return ""
 	}
 	return ts.AsTime().Format("2006-01-02T15:04:05Z07:00")
+}
+
+// AddRepositoryAnnotation adds a repository to an issue's metadata in the JSONL file
+func (r *JSONLRenderer) AddRepositoryAnnotation(issueID, repository string) error {
+	issuesFile := filepath.Join(r.outputDir, ".beads", "issues.jsonl")
+
+	// Read all issues
+	file, err := os.Open(issuesFile)
+	if err != nil {
+		return fmt.Errorf("failed to open issues file: %w", err)
+	}
+	defer file.Close()
+
+	var issues []*BeadsIssue
+	scanner := bufio.NewScanner(file)
+	found := false
+	for scanner.Scan() {
+		var issue BeadsIssue
+		if err := json.Unmarshal(scanner.Bytes(), &issue); err != nil {
+			return fmt.Errorf("failed to parse issue: %w", err)
+		}
+
+		// If this is the target issue, add the repository
+		if issue.ID == issueID {
+			found = true
+			if issue.Metadata == nil {
+				issue.Metadata = make(map[string]string)
+			}
+
+			// Check for duplicate (storing as comma-separated in metadata)
+			reposKey := "repositories"
+			existingRepos := issue.Metadata[reposKey]
+			if existingRepos != "" {
+				repos := strings.Split(existingRepos, ",")
+				for _, r := range repos {
+					if strings.TrimSpace(r) == repository {
+						return fmt.Errorf("repository '%s' is already associated with issue %s", repository, issueID)
+					}
+				}
+				issue.Metadata[reposKey] = existingRepos + "," + repository
+			} else {
+				issue.Metadata[reposKey] = repository
+			}
+		}
+
+		issues = append(issues, &issue)
+	}
+
+	if err := scanner.Err(); err != nil {
+		return fmt.Errorf("error reading issues file: %w", err)
+	}
+
+	if !found {
+		return fmt.Errorf("issue %s not found in issues file", issueID)
+	}
+
+	// Write all issues back to the file
+	outFile, err := os.Create(issuesFile)
+	if err != nil {
+		return fmt.Errorf("failed to create issues file: %w", err)
+	}
+	defer outFile.Close()
+
+	encoder := json.NewEncoder(outFile)
+	for _, issue := range issues {
+		if err := encoder.Encode(issue); err != nil {
+			return fmt.Errorf("failed to write issue: %w", err)
+		}
+	}
+
+	return nil
 }
