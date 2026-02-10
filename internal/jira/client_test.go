@@ -1360,7 +1360,7 @@ func TestFetchIssuesByJQL(t *testing.T) {
 	}))
 	defer server.Close()
 
-	client := NewClient(server.URL, "user@example.com", "token123", "basic")
+	client := NewClient(server.URL, "user@example.com", "token123")
 
 	export, err := client.FetchIssuesByJQL("project = PROJ AND status = Open")
 	if err != nil {
@@ -1459,7 +1459,7 @@ func TestFetchIssuesByJQLWithDependencies(t *testing.T) {
 	}))
 	defer server.Close()
 
-	client := NewClient(server.URL, "user@example.com", "token123", "basic")
+	client := NewClient(server.URL, "user@example.com", "token123")
 
 	export, err := client.FetchIssuesByJQL("assignee = currentUser()")
 	if err != nil {
@@ -1495,7 +1495,7 @@ func TestFetchIssuesByJQLNoResults(t *testing.T) {
 	}))
 	defer server.Close()
 
-	client := NewClient(server.URL, "user@example.com", "token123", "basic")
+	client := NewClient(server.URL, "user@example.com", "token123")
 
 	_, err := client.FetchIssuesByJQL("project = NONEXISTENT")
 	if err == nil {
@@ -1542,7 +1542,7 @@ func TestFetchIssuesByJQLWithComplexQuery(t *testing.T) {
 	}))
 	defer server.Close()
 
-	client := NewClient(server.URL, "user@example.com", "token123", "basic")
+	client := NewClient(server.URL, "user@example.com", "token123")
 
 	// Test with complex JQL query
 	jql := `project = MYPROJ AND assignee = currentUser() AND status IN ("READY TO START", "In Progress")`
@@ -1553,5 +1553,293 @@ func TestFetchIssuesByJQLWithComplexQuery(t *testing.T) {
 
 	if len(export.Issues) != 2 {
 		t.Errorf("Expected 2 issues, got %d", len(export.Issues))
+	}
+}
+
+func TestFetchIssuesByJQLUnauthorized(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		// Return 401 Unauthorized for search endpoint
+		w.WriteHeader(http.StatusUnauthorized)
+		w.Write([]byte(`{"errorMessages":["Authentication required"]}`))
+	}))
+	defer server.Close()
+
+	client := NewClient(server.URL, "user@example.com", "badtoken")
+
+	_, err := client.FetchIssuesByJQL("project = PROJ")
+	if err == nil {
+		t.Error("Expected error for unauthorized request, got nil")
+	}
+}
+
+func TestFetchIssuesByJQLServerError(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		// Return 500 Internal Server Error
+		w.WriteHeader(http.StatusInternalServerError)
+		w.Write([]byte(`{"errorMessages":["Internal server error"]}`))
+	}))
+	defer server.Close()
+
+	client := NewClient(server.URL, "user@example.com", "token123")
+
+	_, err := client.FetchIssuesByJQL("project = PROJ")
+	if err == nil {
+		t.Error("Expected error for server error, got nil")
+	}
+}
+
+func TestFetchIssuesByJQLInvalidJSON(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		// Return invalid JSON
+		w.Header().Set("Content-Type", "application/json")
+		w.Write([]byte(`{"issues": [invalid json}`))
+	}))
+	defer server.Close()
+
+	client := NewClient(server.URL, "user@example.com", "token123")
+
+	_, err := client.FetchIssuesByJQL("project = PROJ")
+	if err == nil {
+		t.Error("Expected error for invalid JSON, got nil")
+	}
+}
+
+func TestFetchIssuesByJQLWithSpecialCharacters(t *testing.T) {
+	var capturedJQL string
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/rest/api/2/search":
+			// Capture the JQL query
+			capturedJQL = r.URL.Query().Get("jql")
+
+			response := map[string]interface{}{
+				"issues": []map[string]interface{}{
+					{"key": "PROJ-100"},
+				},
+				"total": 1,
+			}
+
+			w.Header().Set("Content-Type", "application/json")
+			if err := json.NewEncoder(w).Encode(response); err != nil {
+				t.Errorf("Failed to encode response: %v", err)
+			}
+		default:
+			issueKey := r.URL.Path[len("/rest/api/2/issue/"):]
+			response := createMinimalIssue(issueKey, "Test Issue")
+
+			w.Header().Set("Content-Type", "application/json")
+			if err := json.NewEncoder(w).Encode(response); err != nil {
+				t.Errorf("Failed to encode response: %v", err)
+			}
+		}
+	}))
+	defer server.Close()
+
+	client := NewClient(server.URL, "user@example.com", "token123")
+
+	// Test with special characters that need URL encoding
+	jql := `summary ~ "test \"quoted\" value" AND labels = 'sprint-23'`
+	export, err := client.FetchIssuesByJQL(jql)
+	if err != nil {
+		t.Fatalf("Expected no error, got: %v", err)
+	}
+
+	if len(export.Issues) != 1 {
+		t.Errorf("Expected 1 issue, got %d", len(export.Issues))
+	}
+
+	// Verify the JQL was passed correctly (should be URL decoded on server side)
+	if capturedJQL == "" {
+		t.Error("Expected JQL to be captured, got empty string")
+	}
+}
+
+func TestFetchIssuesByJQLWithEmptyQuery(t *testing.T) {
+	var queryReceived bool
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		queryReceived = true
+		response := map[string]interface{}{
+			"issues": []map[string]interface{}{},
+			"total":  0,
+		}
+
+		w.Header().Set("Content-Type", "application/json")
+		if err := json.NewEncoder(w).Encode(response); err != nil {
+			t.Errorf("Failed to encode response: %v", err)
+		}
+	}))
+	defer server.Close()
+
+	client := NewClient(server.URL, "user@example.com", "token123")
+
+	// Empty JQL should still make the request
+	_, err := client.FetchIssuesByJQL("")
+	if err == nil {
+		t.Error("Expected error for empty JQL query returning no results, got nil")
+	}
+
+	if !queryReceived {
+		t.Error("Expected query to be sent to server")
+	}
+}
+
+func TestFetchIssuesByJQLPaginationWarning(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/rest/api/2/search":
+			// Return only 2 issues but indicate there are 1000 total
+			response := map[string]interface{}{
+				"issues": []map[string]interface{}{
+					{"key": "PROJ-100"},
+					{"key": "PROJ-101"},
+				},
+				"total": 1000,
+			}
+
+			w.Header().Set("Content-Type", "application/json")
+			if err := json.NewEncoder(w).Encode(response); err != nil {
+				t.Errorf("Failed to encode response: %v", err)
+			}
+		default:
+			issueKey := r.URL.Path[len("/rest/api/2/issue/"):]
+			response := createMinimalIssue(issueKey, "Test Issue")
+
+			w.Header().Set("Content-Type", "application/json")
+			if err := json.NewEncoder(w).Encode(response); err != nil {
+				t.Errorf("Failed to encode response: %v", err)
+			}
+		}
+	}))
+	defer server.Close()
+
+	client := NewClient(server.URL, "user@example.com", "token123")
+
+	// Should return partial results with warning
+	export, err := client.FetchIssuesByJQL("project = PROJ")
+	if err != nil {
+		t.Fatalf("Expected no error, got: %v", err)
+	}
+
+	if len(export.Issues) != 2 {
+		t.Errorf("Expected 2 issues (paginated), got %d", len(export.Issues))
+	}
+}
+
+func TestFetchIssuesByJQLWithCircularDependencies(t *testing.T) {
+	fetchCount := make(map[string]int)
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/rest/api/2/search":
+			response := map[string]interface{}{
+				"issues": []map[string]interface{}{
+					{"key": "PROJ-1"},
+				},
+				"total": 1,
+			}
+
+			w.Header().Set("Content-Type", "application/json")
+			if err := json.NewEncoder(w).Encode(response); err != nil {
+				t.Errorf("Failed to encode response: %v", err)
+			}
+		default:
+			issueKey := r.URL.Path[len("/rest/api/2/issue/"):]
+			fetchCount[issueKey]++
+
+			var response map[string]interface{}
+			switch issueKey {
+			case "PROJ-1":
+				response = map[string]interface{}{
+					"key": "PROJ-1",
+					"id":  "1",
+					"fields": map[string]interface{}{
+						"summary": "Issue 1",
+						"issuetype": map[string]interface{}{
+							"name": "Story",
+						},
+						"status": map[string]interface{}{
+							"name": "Open",
+							"statusCategory": map[string]interface{}{
+								"key": "new",
+							},
+						},
+						"priority": map[string]interface{}{
+							"name": "Medium",
+						},
+						"created": "2024-01-01T10:00:00.000+0000",
+						"updated": "2024-01-01T10:00:00.000+0000",
+						"issuelinks": []map[string]interface{}{
+							{
+								"type": map[string]interface{}{
+									"name": "Blocks",
+								},
+								"outwardIssue": map[string]interface{}{
+									"key": "PROJ-2",
+								},
+							},
+						},
+					},
+				}
+			case "PROJ-2":
+				response = map[string]interface{}{
+					"key": "PROJ-2",
+					"id":  "2",
+					"fields": map[string]interface{}{
+						"summary": "Issue 2",
+						"issuetype": map[string]interface{}{
+							"name": "Story",
+						},
+						"status": map[string]interface{}{
+							"name": "Open",
+							"statusCategory": map[string]interface{}{
+								"key": "new",
+							},
+						},
+						"priority": map[string]interface{}{
+							"name": "Medium",
+						},
+						"created": "2024-01-01T10:00:00.000+0000",
+						"updated": "2024-01-01T10:00:00.000+0000",
+						"issuelinks": []map[string]interface{}{
+							{
+								"type": map[string]interface{}{
+									"name": "Blocks",
+								},
+								"outwardIssue": map[string]interface{}{
+									"key": "PROJ-1", // Circular reference back to PROJ-1
+								},
+							},
+						},
+					},
+				}
+			}
+
+			w.Header().Set("Content-Type", "application/json")
+			if err := json.NewEncoder(w).Encode(response); err != nil {
+				t.Errorf("Failed to encode response: %v", err)
+			}
+		}
+	}))
+	defer server.Close()
+
+	client := NewClient(server.URL, "user@example.com", "token123")
+
+	export, err := client.FetchIssuesByJQL("project = PROJ")
+	if err != nil {
+		t.Fatalf("Expected no error, got: %v", err)
+	}
+
+	// Should handle circular dependencies without infinite loop
+	if len(export.Issues) != 2 {
+		t.Errorf("Expected 2 issues, got %d", len(export.Issues))
+	}
+
+	// Each issue should only be fetched once
+	for key, count := range fetchCount {
+		if count > 1 {
+			t.Errorf("Issue %s was fetched %d times (expected 1)", key, count)
+		}
 	}
 }
