@@ -255,12 +255,16 @@ func TestRunFetchByJQLWithMockConfig(t *testing.T) {
 	oldXDG := os.Getenv("XDG_CONFIG_HOME")
 	oldHOME := os.Getenv("HOME")
 	defer func() {
-		os.Setenv("XDG_CONFIG_HOME", oldXDG)
-		os.Setenv("HOME", oldHOME)
+		_ = os.Setenv("XDG_CONFIG_HOME", oldXDG)
+		_ = os.Setenv("HOME", oldHOME)
 	}()
 
-	os.Setenv("XDG_CONFIG_HOME", tmpDir)
-	os.Setenv("HOME", tmpDir)
+	if err := os.Setenv("XDG_CONFIG_HOME", tmpDir); err != nil {
+		t.Fatalf("Failed to set XDG_CONFIG_HOME: %v", err)
+	}
+	if err := os.Setenv("HOME", tmpDir); err != nil {
+		t.Fatalf("Failed to set HOME: %v", err)
+	}
 
 	// Create the expected config directory structure
 	configDir := tmpDir + "/jira-beads-sync"
@@ -281,6 +285,106 @@ func TestRunFetchByJQLWithMockConfig(t *testing.T) {
 	// But the error should be from network/API call, not from config loading
 	if err != nil {
 		// Expected - network call fails
+		t.Logf("Got expected error (network failure): %v", err)
+
+		// Verify it's not a config error
+		if strings.Contains(err.Error(), "failed to configure") {
+			t.Error("Should not fail at config stage with valid config")
+		}
+	}
+}
+
+func TestRunFetchByLabelWithMockConfig(t *testing.T) {
+	// Create a temporary config file
+	tmpDir := t.TempDir()
+
+	configContent := `jira:
+  base_url: https://jira.example.com
+  username: test@example.com
+  api_token: test-token
+`
+
+	// Set environment variable to override config location
+	oldXDG := os.Getenv("XDG_CONFIG_HOME")
+	oldHOME := os.Getenv("HOME")
+	defer func() {
+		_ = os.Setenv("XDG_CONFIG_HOME", oldXDG)
+		_ = os.Setenv("HOME", oldHOME)
+	}()
+
+	if err := os.Setenv("XDG_CONFIG_HOME", tmpDir); err != nil {
+		t.Fatalf("Failed to set XDG_CONFIG_HOME: %v", err)
+	}
+	if err := os.Setenv("HOME", tmpDir); err != nil {
+		t.Fatalf("Failed to set HOME: %v", err)
+	}
+
+	// Create the expected config directory structure
+	configDir := tmpDir + "/jira-beads-sync"
+	if err := os.MkdirAll(configDir, 0755); err != nil {
+		t.Fatalf("Failed to create config dir: %v", err)
+	}
+
+	configPath := configDir + "/config.yml"
+	if err := os.WriteFile(configPath, []byte(configContent), 0600); err != nil {
+		t.Fatalf("Failed to write config: %v", err)
+	}
+
+	// Test runFetchByLabel - will fail at network call
+	err := runFetchByLabel("test-label")
+
+	// We expect an error because there's no real Jira server
+	if err != nil {
+		t.Logf("Got expected error (network failure): %v", err)
+
+		// Verify it's not a config error
+		if strings.Contains(err.Error(), "failed to configure") {
+			t.Error("Should not fail at config stage with valid config")
+		}
+	}
+}
+
+func TestRunQuickstartWithMockConfig(t *testing.T) {
+	// Create a temporary config file
+	tmpDir := t.TempDir()
+
+	configContent := `jira:
+  base_url: https://jira.example.com
+  username: test@example.com
+  api_token: test-token
+`
+
+	// Set environment variable to override config location
+	oldXDG := os.Getenv("XDG_CONFIG_HOME")
+	oldHOME := os.Getenv("HOME")
+	defer func() {
+		_ = os.Setenv("XDG_CONFIG_HOME", oldXDG)
+		_ = os.Setenv("HOME", oldHOME)
+	}()
+
+	if err := os.Setenv("XDG_CONFIG_HOME", tmpDir); err != nil {
+		t.Fatalf("Failed to set XDG_CONFIG_HOME: %v", err)
+	}
+	if err := os.Setenv("HOME", tmpDir); err != nil {
+		t.Fatalf("Failed to set HOME: %v", err)
+	}
+
+	// Create the expected config directory structure
+	configDir := tmpDir + "/jira-beads-sync"
+	if err := os.MkdirAll(configDir, 0755); err != nil {
+		t.Fatalf("Failed to create config dir: %v", err)
+	}
+
+	configPath := configDir + "/config.yml"
+	if err := os.WriteFile(configPath, []byte(configContent), 0600); err != nil {
+		t.Fatalf("Failed to write config: %v", err)
+	}
+
+	// Test runQuickstart with an issue key - will fail at network call
+	err := runQuickstart("TEST-123")
+
+	// We expect an error because there's no real Jira server
+	if err != nil {
 		t.Logf("Got expected error (network failure): %v", err)
 
 		// Verify it's not a config error
