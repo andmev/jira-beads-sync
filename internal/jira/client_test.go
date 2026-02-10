@@ -1560,7 +1560,9 @@ func TestFetchIssuesByJQLUnauthorized(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		// Return 401 Unauthorized for search endpoint
 		w.WriteHeader(http.StatusUnauthorized)
-		w.Write([]byte(`{"errorMessages":["Authentication required"]}`))
+		if _, err := w.Write([]byte(`{"errorMessages":["Authentication required"]}`)); err != nil {
+			t.Errorf("Failed to write response: %v", err)
+		}
 	}))
 	defer server.Close()
 
@@ -1576,7 +1578,9 @@ func TestFetchIssuesByJQLServerError(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		// Return 500 Internal Server Error
 		w.WriteHeader(http.StatusInternalServerError)
-		w.Write([]byte(`{"errorMessages":["Internal server error"]}`))
+		if _, err := w.Write([]byte(`{"errorMessages":["Internal server error"]}`)); err != nil {
+			t.Errorf("Failed to write response: %v", err)
+		}
 	}))
 	defer server.Close()
 
@@ -1592,7 +1596,9 @@ func TestFetchIssuesByJQLInvalidJSON(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		// Return invalid JSON
 		w.Header().Set("Content-Type", "application/json")
-		w.Write([]byte(`{"issues": [invalid json}`))
+		if _, err := w.Write([]byte(`{"issues": [invalid json}`)); err != nil {
+			t.Errorf("Failed to write response: %v", err)
+		}
 	}))
 	defer server.Close()
 
